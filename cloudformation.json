@@ -1,0 +1,103 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Cloudformation template for creating an FTP instances",
+    "Resources": {
+        "ExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "CloudwatchLogs",
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:GetLogEvents",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": [ "arn:aws:logs:*:*:*" ],
+                                    "Effect": "Allow"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [ "sts:AssumeRole" ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [ "lambda.amazonaws.com" ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+    "Lambda": {
+        "Type": "AWS::Lambda::Function",
+        "DependsOn": [
+            "ExecutionRole"
+        ],
+        "Properties": {
+            "Code": {
+                "S3Bucket": "my-test-bucket",
+                "S3Key": "lambdas/test/my-lambda.zip"
+            }
+        },
+        "Description": "Some Lambda Function",
+        "MemorySize": 128,
+        "Handler": {
+            "Ref": "LambdaHandler"
+        },
+        "FunctionName": {
+            "Fn::Join": [
+                "",
+                [
+                    "HaystaxLambdaStart",
+                    {
+                        "Ref": "CISuffix"
+                    }
+                ]
+            ]
+        },
+        "Role": {
+            "Fn::GetAtt": [
+                "ExecutionRole",
+                "Arn"
+            ]
+        },
+        "Timeout": 5,
+        "Runtime": "python3.6"
+    },
+        "Topic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Fn::GetAtt": [ "Lambda", "Arn" ]
+                        },
+                        "Protocol": "lambda"
+                    }
+                ]
+            },
+            "DependsOn": [ "Lambda" ]
+        },
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "Principal": "sns.amazonaws.com",
+                "SourceArn": { "Ref": "Topic" },
+                "FunctionName": {
+                    "Fn::GetAtt": [ "Lambda", "Arn" ]
+                }
+            }
+        }
+    }
+}
